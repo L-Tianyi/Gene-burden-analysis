@@ -28,4 +28,5 @@ dann
 table(Genotype$most_severe_consequence)
 genotype_rm <- Genotype[Genotype$most_severe_consequence != "?",c(21,33)]
 box <- ggplot(genotype_rm, aes(x=most_severe_consequence, y = cadd_phred, color = most_severe_consequence)) + geom_boxplot()+ labs(x = "consequences", y = "CADD Score")
+box
 #the distribution of CADD score of each category of the consequence of genetic variation#
