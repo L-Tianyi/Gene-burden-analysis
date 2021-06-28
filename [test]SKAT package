@@ -16,11 +16,12 @@ load("C:\\Users\\ltian\\Desktop\\BIOL0050\\assigment1\\snps.RData")
 load("C:\\Users\\ltian\\Desktop\\BIOL0050\\assigment1\\mat.gtex.RData")
 
 genotypes <- snps
+genotypes_round <- round(genotypes)
 expression <- mat.gtex
 expression <- expression[,1]
 covariates <- SKAT.example[["X"]]
 covariates <- covariates[1:53,]
 
 obj1<-SKAT_Null_Model(expression ~ covariates, out_type="C")
-SKAT(genotypes,obj1)$p.value
+SKAT(genotypes_round,obj1)$p.value
 #Genotypes of some variants are not the number of minor alleles! These genotypes are flipped!
