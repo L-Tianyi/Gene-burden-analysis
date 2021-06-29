@@ -1,4 +1,4 @@
-#Language: R#
+#Language:R#
 #load the data file#
 Genotype <- read.csv("C:\\Users\\ltian\\Desktop\\GENE0014\\joint_genotyping_anno_chr22.csv")
 
