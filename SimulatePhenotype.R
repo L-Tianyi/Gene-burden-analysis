@@ -32,7 +32,7 @@ for (i in 1:1001) {
   y[i] = 1 + sum(beta*causal_variants[,i])+ 0.2*age[i] + 0.2*sex[i]
 }
 summary(y)
-##turn Z into binary
+##turn y into binary
 mediany <- mediant(y)
 y[which(y < mediany)] <- 0
 y[which(y >= mediany)] <- 1
