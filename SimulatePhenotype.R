@@ -1,6 +1,6 @@
 ##simulate a binary phenotype##
 #choose a subset of causal variants#
-maf <- chrM[,2]
+maf <- chrM[,1]
 maf <- as.numeric(maf)
 rare <- which(maf <= 0.05)
 causal <- sample(rare,0.05*nrow(chr22)) #choose 5% of rare variants (maf<0.05) from the sample as causal variants#
@@ -9,7 +9,7 @@ causal_variants <- as.numeric(causal_variants)
 causal_variants <- matrix(causal_variants, nrow = 3627, ncol = 1001,byrow = FALSE)
 
 #impute missing values in the subset of variants#
-causal_maf <- chrM[causal, 2]
+causal_maf <- chrM[causal, 1]
 causal_maf <- as.numeric(causal_maf)
 causal_NA <- rep(0,length(causal))
 for (i in 1:length(causal_NA)) {
