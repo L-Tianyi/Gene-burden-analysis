@@ -101,7 +101,7 @@ ggplot(loading, aes(x = PC1, y = PC2, color = experiments)) +
 
 ##simulate phenotype and covariates##
 #choose a subset of causal variants#
-maf <- chrM[,2]
+maf <- chrM[,1]
 maf <- as.numeric(maf)
 rare <- which(maf <= 0.05)
 causal <- sample(rare,0.05*nrow(chr22)) #choose 5% of rare variants (maf<0.05) from the sample as causal variants
@@ -140,7 +140,7 @@ y[which(y >= mediany)] <- 1
 
 ###SKAT analysis###
 #create vactors and matrix needed for the analysis#
-gene <- chrM[,3]
+gene <- chrM[,2]
 genenames <- unique(chrM[,2])
 p <- rep(0,length(genenames))
 
