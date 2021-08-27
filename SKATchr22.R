@@ -1,5 +1,9 @@
+###############
+###load data###
+###############
 library(data.table)
 chr22 <- as.data.frame(fread("~/NAS/joint_genotyping_anno_chr22.csv"))
+
 
 #############################
 ###investigate the data set##
@@ -14,6 +18,7 @@ table(Genotype$most_severe_consequence)
 genotype_rm <- Genotype[chr22$most_severe_consequence != "?",c(21,33)]
 box <- ggplot(genotype_rm, aes(x=most_severe_consequence, y = cadd_phred, color = most_severe_consequence)) + geom_boxplot()+ labs(x = "consequences", y = "CADD Score")
 
+
 #################
 ###subset data###
 #################
@@ -21,7 +26,9 @@ chr22 <- chr22[,c(7,29,34:ncol(chr22))] ##allele frequencies, gene symbols, and 
 chrM <- as.matrix(chr22) ##convert into matrix##
 
 
+####################
 ###data filtering###
+####################
 ##calculate missing rate for each sample##
 M <- array(0, ncol(chrM)-2)
 for (i in 1:ncol(chrM)-2) {
@@ -29,18 +36,24 @@ M[i]  <- length(which(is.na(chrM[,i+2])))
 }
 M <- M/nrow(chrM)
 chrM <- chrM[,c(1,2,which(M < 0.2)+2)] ##samples with missing > 20% is removed, 1001 samples left
-##remove variants that has a high missing rate#
+
+##calculate missing rate for each variants##
 Mv <- array(0, nrow(chrM))
 for (i in 1:nrow(chrM)) {
 Mv[i]  <- length(which(is.na(chrM[i,3:1003])))
 }
 Mv <- Mv/(ncol(chrM)-2)
-chrM <- chrM[which(Mv<0.2),] ##72554 variant left##
-dim(chrM)  ##72554x1003##
+chrM <- chrM[which(Mv<0.2),] ##remove variants that has a high missing rate##
+dim(chrM)  ##72554x1003## ##72554 variant left##
 
 
-###PCA analysis###
+
+#########
+###PCA###
+#########
+##############################
 #PCA for Population Structure#
+##############################
 missing <- rep(0,nrow(chrM))
 for (i in 1:length(missing)) {
   missing[i] <- length(which(is.na(chrM[i,])))
@@ -56,7 +69,11 @@ pcpop <- prcomp(pcapop_t, scale. = TRUE)
 library(ggplot2)
 library(factoextra)
 
+pdf("~/fast-storage/ScreePop.pdf") #save the scree plot
 fviz_eig(pcpop) #get scree plot
+dev.off()
+
+pdf("~/fast-storage/PCAPop.pdf") #save the PCA plot
 loading = pcpop$x
 loading <- as.data.frame(loading)
 ggplot(loading, aes(x = PC1, y = PC2)) +
@@ -65,12 +82,18 @@ ggplot(loading, aes(x = PC1, y = PC2)) +
   theme_classic()+
   theme(axis.text=element_text(size=12),
         axis.title=element_text(size=14,face="bold"))
+dev.off()
 
-#PCA for missing#
-chrM_t <- t(chrM)
-miss <- chrM_t[3:nrow(chrM_t),]
-miss <- as.numeric(miss)
+
+#####################
+#PCA for missingness#
+#####################
+chrM_t <- t(chrM) #make the samples as rows and variants as columns
+miss <- chrM_t[3:nrow(chrM_t),] #remove the annotations, left only the genotypes
+miss <- as.numeric(miss) #the class of genotypes is 'integers', PCA analysis only take numeric data as input
 miss <- matrix(miss, nrow = 1001, ncol = 72554,byrow = FALSE)
+
+#creating the missingness metrix
 for (i in 1:ncol(miss)) {
   miss[which(miss[,i] == 0),i] <- 1
 }
@@ -84,9 +107,11 @@ for (i in 1:ncol(miss)) {
   miss[which(is.na(miss[,i])),i] <- 0
 }
 
+#perform PCA#
 miss <- miss[ , which(apply(miss, 2, var) != 0)]
 pctech <- prcomp(miss, scale. = TRUE)
 
+#make plot#
 loading = pctech$x
 loading <- as.data.frame(loading)
 experiments <- c("4216",rep("B",16),rep("BGI",127),rep("Blizard",7),rep("Broad",29),rep("Brogan",5),rep("CEGC",28),rep("Czech",35),
@@ -96,12 +121,19 @@ experiments <- c("4216",rep("B",16),rep("BGI",127),rep("Blizard",7),rep("Broad",
                  "gosgene","gosgene") #creat a vector for experiments#
 loading = cbind(loading,experiments)
 loading$experiments <- as.factor(loading$experiments)
+pdf("~/fast-storage/PCAtech.pdf")
 ggplot(loading, aes(x = PC1, y = PC2, color = experiments)) +
   geom_point(alpha=0.5) + 
   labs(x = "PC1", y = "PC2")
+dev.off()
 
 
-##simulate phenotype and covariates##
+
+
+######################################
+###simulate phenotype, sex, and age###
+######################################
+
 #choose a subset of causal variants#
 maf <- chrM[,1]
 maf <- as.numeric(maf)
@@ -110,6 +142,7 @@ causal <- sample(rare,0.05*nrow(chr22)) #choose 5% of rare variants (maf<0.05) f
 causal_variants <- chrM[causal, 3:ncol(chrM)]
 causal_variants <- as.numeric(causal_variants)
 causal_variants <- matrix(causal_variants, nrow = 3627, ncol = 1001,byrow = FALSE)
+
 #impute missing values in the subset of variants#
 causal_maf <- chrM[causal, 1]
 causal_maf <- as.numeric(causal_maf)
@@ -120,10 +153,12 @@ for (i in 1:length(causal_NA)) {
 for (i in 1:length(causal)) {
   causal_variants[i,which(is.na(causal_variants[i,]))] <- rbinom(causal_NA[i],2,causal_maf[i])
 }
-##get effect size (beta)#
+
+#get effect size (beta)#
 beta <- causal_maf
 beta <- abs(log(beta))
-#simulate covariates
+
+#simulate age and sex#
 age <- sample(10:60,1001,replace = TRUE)
 sex <- rbinom(1001,1,0.5)
 
@@ -133,6 +168,7 @@ for (i in 1:1001) {
   y[i] = 1 + sum(beta*causal_variants[,i])+ 0.2*age[i] + 0.2*sex[i]
 }
 summary(y)
+
 ##turn y into binary
 mediany <- mediant(y)
 y[which(y < mediany)] <- 0
@@ -140,10 +176,13 @@ y[which(y >= mediany)] <- 1
 
 
 
+###################
 ###SKAT analysis###
-#create vactors and matrix needed for the analysis#
+###################
+
+#create vectors and matrix needed for the analysis#
 gene <- chrM[,2]
-genenames <- unique(chrM[,2])
+genenames <- unique(chrM[,2]) #extract the gene names
 p <- rep(0,length(genenames))
 
 chrSKAT <- t(chrM[,3:ncol(chrM)])
@@ -158,7 +197,7 @@ for (i in 1:length(genenames)) {
 p <- as.numeric(p)
 
 #SKAT2 (with PCtech)#
-Tech <- pctech$x[,1:6] #choose first few PCs
+Tech <- pctech$x[,1:10] #choose first few PCs
 obj <- SKAT_Null_Model(y ~ sex + age + Tech, out_type = "D")
 
 pT <- rep(0,length(genenames))
@@ -167,23 +206,28 @@ for (i in 1:length(genenames)) {
 }
 pT <- as.numeric(pT)
 
-p_values <- cbind(p,pT)
+p_values <- data.frame("p"=p, "pT"=pT)
 
-#creat Kinship matrix#
-missing <- rep(0,nrow(chrM)) 
-for (i in 1:length(missing)) {
-  missing[i] <- length(which(is.na(chrM[i,])))
+
+#SKAT3 (with PCA of PS)#
+PCpopulation <- pcpop$x
+PCpopulation <- PCpopulation[,10]
+obj <- SKAT_Null_Model(y ~ sex + age + PCpopulation, out_type = "D")
+
+ppop <- rep(0,length(genenames))
+for (i in 1:length(genenames)) {
+  ppop[i] <- SKAT(matrix(chrSKAT[,c(which(gene == genenames[i]))],nrow = 1001),obj,missing_cutoff=0.2)
 }
-chrKinship <- chrM[which(missing == 0),] #36644x1003 #use the well-covered variants to calculate kinship
-chrKinship <- chrKinship[,3:ncol(chrKinship)]
-chrKinship <- t(chrKinship) #1001x36644
-chrKinship <- as.numeric(chrKinship)
-chrKinship <- matrix(chrKinship, nrow = 1001, ncol = 36644,byrow = FALSE)
+ppop <- as.numeric(ppop)
 
+
+
+#SKAT4 (with GRM)#
+#creat GRM#
 library(AGHmatrix)
-grm <- Gmatrix(chrKinship, method = "VanRaden")
+grm <- Gmatrix(pcapop_t, method = "VanRaden") #use the variants without missingness
 
-##SKAT3 with Kinship##
+#SKAT#
 obj<-SKAT_NULL_emmaX(y ~ age + sex, K = grm)
 pK <- rep(0,length(genenames))
 for (i in 1:length(genenames)) {
@@ -193,8 +237,24 @@ pK <- as.numeric(pK)
 
 p_values <- cbind(p_values,pK)
 
+#SKAT5 (with all covariates)#
+obj<-SKAT_NULL_emmaX(y ~ age + sex + Tech + PCpopulation, K = grm)
+pall <- rep(0,length(genenames))
+for (i in 1:length(genenames)) {
+  pall[i] <- SKAT(matrix(chrSKAT[,c(which(gene == genenames[i]))],nrow = 1001),obj,missing_cutoff=0.2)
+}
+pall <- as.numeric(pall)
 
+p_values <- cbind(p_values,pall)
+
+#save the pvalues#
+write.csv(p_values, "~/NAS/chr22pvalues.csv")
+
+
+#################
 ###make qqplot###
+#################
+
 #set a function, codes are from https://genome.sph.umich.edu/wiki/Code_Sample:_Generating_QQ_Plots_in_R##
 library(lattice)
 qqunif.plot<-function(pvalues, 
@@ -306,8 +366,9 @@ qqunif.plot<-function(pvalues,
 }
 
 ##make my qqplots##
-my.pvalue.list1<-list("sex+age" = p_values[,1],"sex+age+Tech"= p_values[,2])
-my.pvalue.list2<-list("sex+age"= p_values[,1],"sex+age+Kin" = p_values[,3])
+list1 <- list("sex+age"=pvalues$p,"sex+age+Tech"=pvalues$pT,"sex+age+PCpop"=pvalues$ppop, "sex+age+Kin"=pvalues$pK,"sex+age+PCpop+Tech+Kin"=pvalues$pall)
 
-qqunif.plot(my.pvalue.list1, auto.key=list(corner=c(.95,.05)))
-qqunif.plot(my.pvalue.list2, auto.key=list(corner=c(.95,.05)))
+pdf("~/fast-storage/chr22pvalues.pdf")
+qqunif.plot(list1, auto.key=list(corner=c(.95,.05)))
+dev.off()
+
